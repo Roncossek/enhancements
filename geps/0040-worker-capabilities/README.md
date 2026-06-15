@@ -20,40 +20,45 @@
 
 ## Summary
 
-Some Gardener features, like [in-place node updates](../0031-inplace-node-updates/README.md), and (planned) secure boot, only work when the **machine image, the machine type, and Gardener** all support them. The image- and machine-type side fits [GEP-0033](../0033-machine-image-capabilities/README.md)'s capability mechanism, but the *names* of these capabilities form a contract owned by Gardener.
+Some Gardener features, like [in-place node updates](../0031-inplace-node-updates/README.md), and (planned) secure boot, only work when the **machine image, the machine type, and Gardener** all support them. The image- and machine-type side fits [GEP-33](../0033-machine-image-capabilities/README.md)'s capability mechanism, but the *names* of these capabilities form a contract owned by Gardener.
 
-This GEP reserves the prefix `gardener-` inside GEP-0033 capabilities for this family of features and offers an option for existing or future typed worker pool fields (e.g. `updateStrategy`) into the GEP-0033 selection algorithm. **Users keep configuring features via typed worker fields**; Gardener internally derives the matching capability requirements.
+This GEP reserves the prefix `gardener-` inside GEP-33 capabilities for this family of features and offers an option for existing or future typed worker pool fields (e.g. `updateStrategy`) into the GEP-33 selection algorithm. **Users keep configuring features via typed worker fields**; Gardener internally derives the matching capability requirements.
 
 ## Motivation
 
-Today, when a user enables in-place updates on a worker pool, nothing checks that the selected machine image and machine type actually support them. The misconfiguration surfaces only at runtime. Avoiding it requires manually finding a machine-type / machine-image pair in the CloudProfile that is compatible with the worker pool configuration, and keeping that selection valid across maintenance updates. This means for now automatic OS update operations are off the table for in-place update pools.
+Today, in-place node update is the first example of a Gardener feature that depends on a three-way compatibility contract: the worker pool must request the feature, the selected machine image version (flavor) must support it, and the selected machine type must support it as well. More features with the same shape are expected, for example secure boot.
 
-This GEP delivers two benefits, both built on GEP-0033:
+Today this contract is only partially expressed. In the case of in-place updates:
 
-1. **Automatic image selection.** Gardener picks (and maintains) a machine image that is compatible with both the chosen machine type and the worker pool configuration.
-2. **Admission-time validation.** Incompatible combinations of machine image, machine type, and worker pool are rejected up front instead of failing on the node.
+1. the [worker pool configuration](https://github.com/gardener/gardener/blob/159fbd0df8a3a272bfdf054638ce1ec1f45ccc9e/pkg/apis/core/types_shoot.go#L1372) is `updateStrategy`
+1. the [machine image version](https://github.com/gardener/gardener/blob/159fbd0df8a3a272bfdf054638ce1ec1f45ccc9e/pkg/apis/core/types_cloudprofile.go#L375) metadata is `InPlaceUpdates.Supported`
+1. **machine type** metadata is not defined
+1. compatibility is enforced by several separate **filter implementations**: e.g. [maintenance operations](https://github.com/gardener/gardener/blob/b8a336572b2305befa05d358480ff22f3e11d0a9/pkg/controllermanager/controller/shoot/maintenance/helper/helper.go#L206), [shoot admission](https://github.com/gardener/gardener/blob/159fbd0df8a3a272bfdf054638ce1ec1f45ccc9e/plugin/pkg/shoot/validator/admission.go#L1594-L1610), [default image selection](https://github.com/gardener/gardener/blob/159fbd0df8a3a272bfdf054638ce1ec1f45ccc9e/plugin/pkg/shoot/mutator/admission.go#L632-L634), ...
+1. **image version flavor selection** is missing; if more than one flavor is grouped under a machine image version, selecting a compatible flavor is not guaranteed
 
-The trade is explicit: **less complexity for the user, more for the implementation**.
+As a result, Gardener can accept or derive combinations whose full compatibility is not expressed in one place, and operators may need to split images into separate versions just to encode flavor-specific support and allow automatic image maintenance to work.
+
+The underlying problem: these features need a shared compatibility check across worker pool configuration, machine image flavors, and machine types. This GEP therefore builds on the existing GEP-33 capability mechanism by reserving a Gardener-owned capability namespace and by deriving capability requirements from typed worker pool fields, so that admission and image selection can consistently reject incompatible combinations. Once implemented, only minimal changes are required to the worker pool API to support new features.
 
 ### Goals
 
 - Reserve the `gardener-` prefix inside `spec.machineCapabilities` for capability names whose keys and values are owned by Gardener.
-- Extend GEP-0033's selection and validation algorithm to also satisfy capability requirements derived from typed worker pool fields.
+- Extend GEP-33's selection and validation algorithm to also satisfy capability requirements derived from typed worker pool fields.
 - Reject incompatible combinations of machine image, machine type, and worker pool at admission time.
 
 ### Non-Goals
 
 - Defining the full list of reserved capabilities up front — it grows with new features.
 - Introducing a generic `capabilities` map on the worker pool API. Worker pools keep typed fields; requirements are derived internally.
-- Changing the GEP-0033 mechanism. Reserved capabilities behave like any other — only their **names and values** are owned by Gardener.
+- Changing the GEP-33 mechanism. Reserved capabilities behave like any other — only their **names and values** are owned by Gardener.
 - Implementing the features themselves (e.g. wiring secure boot end-to-end is out of scope).
 
 ## Proposal
 
-GEP-0033 is unchanged. This GEP adds two ingredients on top:
+GEP-33 is unchanged. This GEP adds two ingredients on top:
 
 1. **A reserved namespace.** Capability names starting with `gardener-` are owned by Gardener. Operators must register them in `spec.machineCapabilities` using the keys and values Gardener defines; CloudProfile admission validates this. Anything *outside* `gardener-` is free for operators, exactly as today.
-2. **A derivation step.** When a user configures a worker pool, Gardener internally translates relevant typed fields into capability requirements (e.g. `updateStrategy: AutoInPlaceUpdate` → `gardener-update-type: in-place`). These requirements feed the GEP-0033 matching algorithm alongside machine type and machine image capabilities.
+2. **A derivation step.** When a user configures a worker pool, Gardener internally translates relevant typed fields into capability requirements (e.g. `updateStrategy: AutoInPlaceUpdate` → `gardener-update-type: in-place`). These requirements feed the GEP-33 matching algorithm alongside machine type and machine image capabilities.
 
 The mechanism is **additive**: CloudProfiles and worker pools that don't use any reserved capability behave exactly as today.
 
@@ -123,21 +128,45 @@ Only typed worker pool fields drive requirements — users of the shoot resource
 
 ### Image Selection Algorithm
 
-GEP-0033 introduced a selection algorithm based on capability compatibility:
+GEP-33 introduced a selection algorithm based on capability compatibility:
 
 ```go
-AreCapabilitiesCompatible(imageFlavor, machineType, capabilityDefinitions)
+AreCapabilitiesCompatible(imageFlavor, machineType, capabilityDefinitions){
+	defaultedCapabilities1 := GetCapabilitiesWithAppliedDefaults(imageFlavor, capabilityDefinitions)
+	defaultedCapabilities2 := GetCapabilitiesWithAppliedDefaults(machineType, capabilityDefinitions)
+
+	commonCapabilities := GetCapabilitiesIntersection(defaultedCapabilities1, defaultedCapabilities2)
+	// If the intersection has at least one value for each capability, the capabilities are compatible.
+	for _, values := range commonCapabilities {
+		if len(values) == 0 {
+      return false
+		}
+	}
+	return true
+}
 ```
 
-This GEP adds a third input:
+This GEP adds a third capability input for the worker pool's derived requirements:
 
 ```go
-AreCapabilitiesCompatible(imageFlavor, machineType, workerRequirements, capabilityDefinitions)
+AreCapabilitiesCompatible(imageFlavor, machineType, workerRequirements, capabilityDefinitions){
+	defaultedCapabilities1 := GetCapabilitiesWithAppliedDefaults(imageFlavor, capabilityDefinitions)
+	defaultedCapabilities2 := GetCapabilitiesWithAppliedDefaults(machineType, capabilityDefinitions)
+  defaultedCapabilities3 := GetCapabilitiesWithAppliedDefaults(workerRequirements, capabilityDefinitions)
+
+	commonCapabilities := GetCapabilitiesIntersection(defaultedCapabilities1, defaultedCapabilities2, defaultedCapabilities3)
+	for _, values := range commonCapabilities {
+		if len(values) == 0 {
+      return false
+		}
+	}
+	return true
+}
 ```
 
-The algorithm succeeds if, for every capability defined in `spec.machineCapabilities`, the value sets from image flavor, machine type, and worker requirements have a non-empty intersection (with image- and machine-type-side defaulting per GEP-0033).
+The algorithm succeeds if, for every capability defined in `spec.machineCapabilities`, the value sets from image flavor, machine type, and worker requirements have a non-empty intersection (with image- and machine-type-side defaulting per GEP-33).
 
-The same algorithm is invoked from three existing call sites:
+The same algorithm is invoked from four existing call sites:
 
 1. [Shoot validator admission](https://github.com/gardener/gardener/blob/e6263d6a575e4181f0289345803ccb59117605f6/plugin/pkg/shoot/validator/admission.go#L1000) — rejects user-selected machine image / machine type pairs that are incompatible with the worker pool's capability requirements.
 2. [Shoot mutator admission](https://github.com/gardener/gardener/blob/d9897865ab9181c307efdfa93f14268fcd09fe88/plugin/pkg/shoot/mutator/admission.go#L559) — picks a default machine image compatible with the chosen machine type and worker pool when the user does not specify one.
@@ -160,7 +189,7 @@ The same algorithm is invoked from three existing call sites:
 
 ## Alternatives
 
-- **Generic `capabilities` map on the worker pool API.** Most consistent with GEP-0033, but rejected for three reasons: (1) it forces users to learn the CloudProfile's capability vocabulary to configure standard features; (2) most capabilities are infrastructure-level concerns that are irrelevant to shoot users (e.g. hypervisor type, or which bare-metal machine type works with which image) — exposing them on the worker pool API would surface implementation detail with no user benefit; (3) it leaks an internal contract into operator-facing API.
+- **Generic `capabilities` map on the worker pool API.** Most consistent with GEP-33, but rejected for three reasons: (1) it forces users to learn the CloudProfile's capability vocabulary to configure standard features; (2) most capabilities are infrastructure-level concerns that are irrelevant to shoot users (e.g. hypervisor type, or which bare-metal machine type works with which image) — exposing them on the worker pool API would surface implementation detail with no user benefit; (3) it leaks an internal contract into operator-facing API.
 - **No reserved namespace.** Hard-code names only in Gardener code. Lets operators accidentally redefine them with incompatible values. Rejected — the `gardener-` prefix plus admission validation prevents this.
-- **Implicit reserved capabilities (no `spec.machineCapabilities` entry).** Inconsistent with GEP-0033, which declares every capability there. Rejected — operators register reserved capabilities like any other.
+- **Implicit reserved capabilities (no `spec.machineCapabilities` entry).** Inconsistent with GEP-33, which declares every capability there. Rejected — operators register reserved capabilities like any other.
 - **Provider-extension-owned capabilities in this GEP.** Earlier drafts let provider extensions own a `gardener-<provider>-` sub-namespace and derive capability requirements from typed `WorkerConfig` fields (e.g. OpenStack trusted launch). This was deferred because `WorkerConfig` is opaque to gardener-apiserver, the maintenance controller, and the Dashboard — only the extension can decode it — which makes the mapping mechanism a substantial design problem on its own. Solving it is independent of the core mechanism this GEP introduces.
