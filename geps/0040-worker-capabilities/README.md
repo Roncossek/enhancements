@@ -49,7 +49,6 @@ The underlying problem: these features need a shared compatibility check across 
 ### Non-Goals
 
 - Defining the full list of reserved capabilities up front — it grows with new features.
-- Introducing a generic `capabilities` map on the worker pool API. Worker pools keep typed fields; requirements are derived internally.
 - Changing the GEP-33 mechanism. Reserved capabilities behave like any other — only their **names and values** are owned by Gardener.
 - Implementing the features themselves (e.g. wiring secure boot end-to-end is out of scope).
 
@@ -128,7 +127,9 @@ Only typed worker pool fields drive requirements — users of the shoot resource
 
 ### Image Selection Algorithm
 
-GEP-33 introduced a selection algorithm based on capability compatibility:
+GEP-33 introduced a selection algorithm based on capability compatibility.
+
+The parameters are the capabilities of one machine image flavor and a machine type, plus the capability definitions (`spec.machineCapabilities`) from the CloudProfile:
 
 ```go
 AreCapabilitiesCompatible(imageFlavor, machineType, capabilityDefinitions){
@@ -189,7 +190,6 @@ The same algorithm is invoked from four existing call sites:
 
 ## Alternatives
 
-- **Generic `capabilities` map on the worker pool API.** Most consistent with GEP-33, but rejected for three reasons: (1) it forces users to learn the CloudProfile's capability vocabulary to configure standard features; (2) most capabilities are infrastructure-level concerns that are irrelevant to shoot users (e.g. hypervisor type, or which bare-metal machine type works with which image) — exposing them on the worker pool API would surface implementation detail with no user benefit; (3) it leaks an internal contract into operator-facing API.
-- **No reserved namespace.** Hard-code names only in Gardener code. Lets operators accidentally redefine them with incompatible values. Rejected — the `gardener-` prefix plus admission validation prevents this.
-- **Implicit reserved capabilities (no `spec.machineCapabilities` entry).** Inconsistent with GEP-33, which declares every capability there. Rejected — operators register reserved capabilities like any other.
+- **Generic `capabilities` map on the worker pool API.** Most consistent with GEP-33, but rejected for three reasons: (1) it forces users to learn the CloudProfile's capability vocabulary to configure worker features; (2) most capabilities are infrastructure-level concerns that are irrelevant to shoot users (e.g. hypervisor type, or which bare-metal machine type works with which image). Exposing them on the worker pool API would surface implementation detail with no user benefit; (3) it leaks a CloudProfile internal contract into user-facing API. (4) changing/removing capabilities today can be done isolated within a CloudProfile. This would add a dependency to the workers using that CloudProfile.
+- **Implicit reserved capabilities (no `spec.machineCapabilities` entry).** Inconsistent with GEP-33, which declares every capability there. Rejected — as this would contradict the idea that ´spec.machineCapabilities´ is the authoritative source for capability definitions.
 - **Provider-extension-owned capabilities in this GEP.** Earlier drafts let provider extensions own a `gardener-<provider>-` sub-namespace and derive capability requirements from typed `WorkerConfig` fields (e.g. OpenStack trusted launch). This was deferred because `WorkerConfig` is opaque to gardener-apiserver, the maintenance controller, and the Dashboard — only the extension can decode it — which makes the mapping mechanism a substantial design problem on its own. Solving it is independent of the core mechanism this GEP introduces.
