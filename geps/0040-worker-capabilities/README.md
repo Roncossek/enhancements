@@ -190,6 +190,12 @@ The same algorithm is invoked from four existing call sites:
 
 ## Alternatives
 
-- **Generic `capabilities` map on the worker pool API.** Most consistent with GEP-33, but rejected for three reasons: (1) it forces users to learn the CloudProfile's capability vocabulary to configure worker features; (2) most capabilities are infrastructure-level concerns that are irrelevant to shoot users (e.g. hypervisor type, or which bare-metal machine type works with which image). Exposing them on the worker pool API would surface implementation detail with no user benefit; (3) it leaks a CloudProfile internal contract into user-facing API. (4) changing/removing capabilities today can be done isolated within a CloudProfile. This would add a dependency to the workers using that CloudProfile.
+- **Generic `capabilities` map on the worker pool API.** Most consistent with GEP-33, but rejected because: 
+  1. it forces users to learn the CloudProfile's capability vocabulary to configure worker features.
+  2. most capabilities are infrastructure-level concerns that are irrelevant to shoot users (e.g. hypervisor type, or which bare-metal machine type works with which image). Exposing them on the worker pool API would surface implementation detail with no user benefit
+  3. it leaks a CloudProfile internal contract into user-facing API. 
+  4. changing/removing capabilities today can be done isolated within a CloudProfile. This would add a dependency to the workers using that CloudProfile.
+
 - **Implicit reserved capabilities (no `spec.machineCapabilities` entry).** Inconsistent with GEP-33, which declares every capability there. Rejected — as this would contradict the idea that ´spec.machineCapabilities´ is the authoritative source for capability definitions.
-- **Provider-extension-owned capabilities in this GEP.** Earlier drafts let provider extensions own a `gardener-<provider>-` sub-namespace and derive capability requirements from typed `WorkerConfig` fields (e.g. OpenStack trusted launch). This was deferred because `WorkerConfig` is opaque to gardener-apiserver, the maintenance controller, and the Dashboard — only the extension can decode it — which makes the mapping mechanism a substantial design problem on its own. Solving it is independent of the core mechanism this GEP introduces.
+
+- **Provider-extension-owned capabilities in this GEP.** Earlier drafts let provider extensions own a `gardener-<provider>-` sub-namespace and derive capability requirements from typed `WorkerConfig` fields (e.g. OpenStack trusted launch). This was deferred because `WorkerConfig` is unknown to gardener-apiserver, the maintenance controller, and the Dashboard (only the extension can decode it) which makes the mapping mechanism a substantial design problem on its own. Solving it is independent of the core mechanism this GEP introduces.
