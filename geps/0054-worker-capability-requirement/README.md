@@ -184,9 +184,9 @@ The same algorithm is invoked from four existing call sites:
 
 ## Drawbacks
 
-- **Internal complexity grows.** Selection gains a third input and a derivation step. The user-side simplification is the explicit trade.
+- **Internal complexity grows.** Selection gains a third input and a derivation step. The user-side validation together with a framework for future feature development is the explicit trade.
 - **Operator setup per CloudProfile.** Operators who want a reserved feature must register the capability in `spec.machineCapabilities` and declare per-image-flavor support. CloudProfiles that expose no reserved features are unaffected.
-- **Coupling between Gardener releases and CloudProfile content.** Reserved definitions are owned by Gardener; operators must keep CloudProfiles in sync with the version they run. CloudProfile admission catches mismatches.
+- **Coupling between Gardener releases and CloudProfile content.** Reserved definitions are owned by Gardener; operators must keep CloudProfiles in sync with the version they run to use new features.
 
 ## Alternatives
 
