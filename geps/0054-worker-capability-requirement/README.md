@@ -133,17 +133,17 @@ The parameters are the capabilities of one machine image flavor and a machine ty
 
 ```go
 AreCapabilitiesCompatible(imageFlavor, machineType, capabilityDefinitions){
-	defaultedCapabilities1 := GetCapabilitiesWithAppliedDefaults(imageFlavor, capabilityDefinitions)
-	defaultedCapabilities2 := GetCapabilitiesWithAppliedDefaults(machineType, capabilityDefinitions)
+  defaultedCapabilities1 := GetCapabilitiesWithAppliedDefaults(imageFlavor, capabilityDefinitions)
+  defaultedCapabilities2 := GetCapabilitiesWithAppliedDefaults(machineType, capabilityDefinitions)
 
-	commonCapabilities := GetCapabilitiesIntersection(defaultedCapabilities1, defaultedCapabilities2)
-	// If the intersection has at least one value for each capability, the capabilities are compatible.
-	for _, values := range commonCapabilities {
-		if len(values) == 0 {
+  commonCapabilities := GetCapabilitiesIntersection(defaultedCapabilities1, defaultedCapabilities2)
+  // If the intersection has at least one value for each capability, the capabilities are compatible.
+  for _, values := range commonCapabilities {
+    if len(values) == 0 {
       return false
-		}
-	}
-	return true
+    }
+  }
+  return true
 }
 ```
 
@@ -151,17 +151,17 @@ This GEP adds a third capability input for the worker pool's derived requirement
 
 ```go
 AreCapabilitiesCompatible(imageFlavor, machineType, workerRequirements, capabilityDefinitions){
-	defaultedCapabilities1 := GetCapabilitiesWithAppliedDefaults(imageFlavor, capabilityDefinitions)
-	defaultedCapabilities2 := GetCapabilitiesWithAppliedDefaults(machineType, capabilityDefinitions)
+  defaultedCapabilities1 := GetCapabilitiesWithAppliedDefaults(imageFlavor, capabilityDefinitions)
+  defaultedCapabilities2 := GetCapabilitiesWithAppliedDefaults(machineType, capabilityDefinitions)
   defaultedCapabilities3 := GetCapabilitiesWithAppliedDefaults(workerRequirements, capabilityDefinitions)
 
-	commonCapabilities := GetCapabilitiesIntersection(defaultedCapabilities1, defaultedCapabilities2, defaultedCapabilities3)
-	for _, values := range commonCapabilities {
-		if len(values) == 0 {
+  commonCapabilities := GetCapabilitiesIntersection(defaultedCapabilities1, defaultedCapabilities2, defaultedCapabilities3)
+  for _, values := range commonCapabilities {
+    if len(values) == 0 {
       return false
-		}
-	}
-	return true
+    }
+  }
+  return true
 }
 ```
 
