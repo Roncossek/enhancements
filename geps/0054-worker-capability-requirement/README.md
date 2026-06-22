@@ -1,22 +1,5 @@
 # GEP-0054: Worker Capability Requirements for Machine Image Selection
 
-## Table of Contents
-
-- [GEP-0054: Worker Capability Requirements for Machine Image Selection](#gep-0054-worker-capability-requirements-for-machine-image-selection)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Risks and Mitigations](#risks-and-mitigations)
-  - [Design Details](#design-details)
-    - [Reserved Capability Names](#reserved-capability-names)
-    - [Deriving Capability Requirements](#deriving-capability-requirements)
-    - [Image Selection Algorithm](#image-selection-algorithm)
-    - [Validation](#validation)
-  - [Drawbacks](#drawbacks)
-  - [Alternatives](#alternatives)
 
 ## Summary
 
