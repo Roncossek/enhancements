@@ -21,7 +21,64 @@ Today this contract is only partially expressed. In the case of in-place updates
 
 As a result, Gardener can accept or derive combinations whose full compatibility is not expressed in one place, and operators may need to split images into separate versions just to encode flavor-specific support and allow automatic image maintenance to work.
 
-The underlying problem: these features need a shared compatibility check across worker pool configuration, machine image flavors, and machine types. This GEP therefore builds on the existing GEP-33 capability mechanism by reserving a Gardener-owned capability namespace and by deriving capability requirements from typed worker pool fields, so that admission and image selection can consistently reject incompatible combinations. Once implemented, only minimal changes are required to the worker pool API to support new features.
+#### Concrete configuration example
+
+Because feature support cannot be expressed per flavor today, the only way to model a feature like in-place updates is to split it into a dedicated machine image version entry:
+
+```yaml
+machineImages:
+  - name: gardenlinux
+    versions:
+      - version: "2150.4.0"
+        capabilityFlavors:
+          - architecture: [amd64]
+
+      - version: "2150.4.0-inplace"
+        inPlaceUpdates:
+          supported: true
+        capabilityFlavors:
+          - architecture: [amd64]
+```
+
+Already here the same semver appears twice and the feature leaks into the version string. As more orthogonal features may be added (e.g. FIPS, secure boot, GPU support), the cloud profile explodes into a cartesian product of versions, each carrying its own feature flags:
+
+```yaml
+machineImages:
+  - name: gardenlinux
+    versions:
+      - version: 2150.4.0
+        fipsSupported: false
+        capabilityFlavors:
+          - architecture: [amd64]
+          - architecture: [arm64]
+      - version: 2150.4.0-inplace
+        inPlaceUpdates: { supported: true }
+        fipsSupported: false
+        capabilityFlavors:
+          - architecture: [amd64]
+          - architecture: [arm64]
+      - version: 2150.4.0-fips
+        fipsSupported: true
+        capabilityFlavors:
+          - architecture: [amd64]
+          - architecture: [arm64]
+      - version: 2150.4.0-fips-inplace
+        inPlaceUpdates: { supported: true }
+        fipsSupported: true
+        capabilityFlavors:
+          - architecture: [amd64]
+          - architecture: [arm64]
+      # ... plus secureboot variants
+```
+
+The consequences are:
+
+- The same semver is duplicated up to `2^F` times for `F` orthogonal features.
+- Every new feature requires a new top-level API field on the machine image version (`inPlaceUpdates`, `fipsSupported`, `secureBootSupported`, ...).
+- Every such field requires its own filter implementation in shoot admission, the maintenance controller, and default image selection (see the locations listed above).
+- Operators are forced to encode feature support in version naming conventions (`-inplace`, `-fips`, `-fips-inplace`) so that automatic image maintenance picks a compatible version.
+
+The underlying problem: these features need a shared compatibility check across worker pool configuration, machine image flavors, and machine types. This GEP therefore builds on the existing GEP-33 capability mechanism by reserving a Gardener-owned capability namespace and by deriving capability requirements from typed worker pool fields, so that admission and image selection can consistently reject incompatible combinations. With it the matrix above collapses back to a single version carrying a set of `capabilityFlavors`, expressing feature support declaratively in one place and reusing the existing capability matching logic instead of adding new filters. Once implemented, only minimal changes are required to the worker pool API to support new features.
 
 ### Goals
 
