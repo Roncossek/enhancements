@@ -255,4 +255,4 @@ The same algorithm is invoked from four existing call sites:
           values: ["amd64", "arm64"]
   ```
 
-  Internally these would still be encoded as capabilities so the matching algorithm is unaffected. Rejected because it is a breaking change to `spec.machineCapabilities`, every new Gardener-owned feature would still require a CloudProfile API change (defeating one of GEP-33's goals), and the prefix approach gives the same orchestration guarantees once the same API conventions are applied to reserved `gardener-*` names. A future API version can still promote individual reserved capabilities to first-class fields.
+  Internally these would still be encoded as capabilities so the matching algorithm is unaffected. Rejected because it is a breaking change to `spec.machineCapabilities`, and the prefix approach gives the same orchestration guarantees once the same API conventions are applied to reserved `gardener-*` names. A future API version can still promote individual reserved capabilities to first-class fields.
