@@ -136,6 +136,8 @@ const (
 
 CloudProfile admission validates that any `gardener-*` capability registered in `spec.machineCapabilities` matches Gardener's authoritative definition.
 
+Reserved capabilities are part of Gardener's public API surface. Adding, renaming, changing, deprecating, or removing a reserved capability name or value follows the same API conventions as a dedicated field on the CloudProfile API (deprecation periods, compatibility guarantees, release-note requirements). This is what makes the prefix approach a viable substitute for first-class typed fields.
+
 ### Deriving Capability Requirements
 
 The mapping is part of the image selection process in shoot admission, the maintenance controller and provider extension:
@@ -239,3 +241,18 @@ The same algorithm is invoked from four existing call sites:
 - **Implicit reserved capabilities (no `spec.machineCapabilities` entry).** Inconsistent with GEP-33, which declares every capability there. Rejected — as this would contradict the idea that ´spec.machineCapabilities´ is the authoritative source for capability definitions.
 
 - **Provider-extension-owned capabilities in this GEP.** Earlier drafts let provider extensions own a `gardener-<provider>-` sub-namespace and derive capability requirements from typed `WorkerConfig` fields (e.g. OpenStack trusted launch). This was deferred because `WorkerConfig` is unknown to gardener-apiserver, the maintenance controller, and the Dashboard (only the extension can decode it) which makes the mapping mechanism a substantial design problem on its own. Solving it is independent of the core mechanism this GEP introduces.
+
+- **Dedicated first-class API fields for Gardener-owned capabilities.** Instead of reserving a `gardener-` prefix inside the generic `spec.machineCapabilities` list, the CloudProfile API could expose Gardener-relevant capabilities as typed fields, e.g.:
+
+  ```yaml
+  spec:
+    machineCapabilities:
+      gardenerOwned:
+        nodeUpdateTypes: ["rolling", "in-place"]
+        bootTypes: ["secure", "legacy"]
+      custom:
+        - name: architecture
+          values: ["amd64", "arm64"]
+  ```
+
+  Internally these would still be encoded as capabilities so the matching algorithm is unaffected. Rejected because it is a breaking change to `spec.machineCapabilities`, every new Gardener-owned feature would still require a CloudProfile API change (defeating one of GEP-33's goals), and the prefix approach gives the same orchestration guarantees once the same API conventions are applied to reserved `gardener-*` names. A future API version can still promote individual reserved capabilities to first-class fields.
